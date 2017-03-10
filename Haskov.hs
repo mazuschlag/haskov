@@ -33,7 +33,7 @@ walk :: Map Text [Text] -> Text -> StdGen -> [Text]
 walk markovMap key gen
     | key == empty = []
     | isEndWord key = key : []
-    | otherwise = (key : (pack " ") : walk markovMap word (snd r)
+    | otherwise = (key : (pack " ") : walk markovMap word (snd r))
     where
         r = randomR (0, (length (markovMap ! key)) - 1) gen :: (Int, StdGen)
         word = (markovMap ! key) !! (fst r)
