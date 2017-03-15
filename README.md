@@ -4,10 +4,12 @@ Create Markov Chains from text files using Haskell.
 
 ## USE
 
-Compile and run:
+Generalized Markov Chain use is currently in development on Haskov.hs
+
+For text files, compile HaskovText.hs and run:
 
 ```
-./Haskov [mytextdoc.txt]
+./HaskovText <filename.txt>
 ```
 
 ## To Do:

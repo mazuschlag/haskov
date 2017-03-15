@@ -1,71 +1,78 @@
 module Haskov where
-
-import System.IO
-import System.IO.Error
-import System.Environment
-import System.Random
-
-import Data.Char (isUpper)
-import Data.List (group, sort)
-import Data.Text (Text, pack, unpack, empty, splitOn, concat, find)
-import qualified Data.Text as Text
-import Data.Map.Strict (Map, (!), lookup, fromList, size)
+    
+import Data.Matrix (Matrix, extendTo, setElem, getElem)
+import qualified Data.Matrix as Matrix
+import Data.Map.Strict (Map, (!), member, keys)
 import qualified Data.Map.Strict as Map
 
-main = fromIO `catchIOError` handler
+data HaskovMatrix a = HaskovMatrix { hmap :: Map a Int
+                                     , hmatrix :: Matrix Float }
+                                     
+instance (Show a, Ord a) => Show (HaskovMatrix a) where 
+    show haskov = show $ toList haskov 
+        
+empty :: HaskovMatrix a
+empty = HaskovMatrix (Map.empty) (Matrix.zero 0 0)
 
-fromIO :: IO()
-fromIO = do
-    (input:_) <- getArgs
-    contents <- readFile input
-    gen <- getStdGen
+singleton :: (Ord a) => a -> Float -> HaskovMatrix a
+singleton a n = 
+    HaskovMatrix (Map.singleton a 1) (Matrix.matrix 1 1 (\(i,j) -> n))
 
-    let text = Text.words (pack contents)
-        keys = getkeys text
-        haskovMap = generate text keys
-        startWords = foldr (\x acc -> if isStartWord x then x:acc else acc) [] keys
-        startIndex = randomR (0, (length startWords) - 1) gen :: (Int, StdGen)
-        firstWord = startWords !! (fst startIndex)
-
-    putStrLn $ unpack . Text.concat $ walk haskovMap firstWord (snd startIndex)
-
-walk :: Map Text [Text] -> Text -> StdGen -> [Text]
-walk markovMap key gen
-    | key == empty = []
-    | isEndWord key = key : []
-    | otherwise = (key : (pack " ") : walk markovMap word (snd r))
+insert :: (Ord a) => a -> a -> Float -> HaskovMatrix a -> HaskovMatrix a
+insert i j n (HaskovMatrix hmap hmatrix) =
+    let newMap = hmapInsert i j hmap
+    in HaskovMatrix (newMap) (hmatrixInsert i j n hmatrix newMap)
+    
+lookUp :: (Ord a) => a -> a -> HaskovMatrix a -> Maybe Float
+lookUp i j (HaskovMatrix hmap hmatrix)
+    | hasI && hasJ = Just (getElem (hmap ! i) (hmap ! j) hmatrix)
+    | otherwise    = Nothing
     where
-        r = randomR (0, (length (markovMap ! key)) - 1) gen :: (Int, StdGen)
-        word = (markovMap ! key) !! (fst r)
+        hasI = member i hmap
+        hasJ = member j hmap
 
-generate :: [Text] -> [Text] -> Map Text [Text]
-generate lists keys = fromList (map makeKeyChain keys)
-    where makeKeyChain key = (key, (chain key empty lists))
+--walk :: (Ord a) => HaskovMatrix a -> [a]
+--walk (HaskovMatrix hmap hmatrix) = 
+    
+toList :: (Ord a) => HaskovMatrix a -> [((a, a), Float)]
+toList haskov =
+    let pairs = rowColPairs haskov
+        values = map (rowColValue haskov) pairs
+    in zip pairs values
 
-chain :: Text -> Text -> [Text] -> [Text]
-chain _ _ [] = []
-chain key curr (next:list)
-    | curr == key = next : chain key next list
-    | otherwise   = chain key next list
+fromList :: (Ord a) => [((a, a), Float)] -> HaskovMatrix a
+fromList _ = empty
+        
+-- Helper Functions --
+hmapInsert :: (Ord a) => a -> a -> Map a Int -> Map a Int
+hmapInsert i j hmap
+    | hasI && (not hasJ) = Map.insert j (mapSize+1) hmap 
+    | (not hasI) && hasJ = Map.insert i (mapSize+1) hmap
+    | (not hasI) && (not hasJ) = 
+        Map.insert j (mapSize+1) (Map.insert i (mapSize+1) hmap)
+    | otherwise = hmap
+    where
+        mapSize = Map.size hmap
+        hasI = member i hmap
+        hasJ = member j hmap
+    
+hmatrixInsert :: (Ord a) => a -> a -> Float -> Matrix Float -> Map a Int -> Matrix Float
+hmatrixInsert i j n hmatrix hmap
+    | mapSize > matrixSize =
+        setElem n (hmap ! i, hmap ! j) (extendTo 0 mapSize mapSize hmatrix)
+    | otherwise = setElem n (hmap ! i, hmap ! j) hmatrix
+    where
+        mapSize = Map.size hmap
+        matrixSize = Matrix.nrows hmatrix
 
-getkeys :: [Text] -> [Text]
-getkeys lists = map head . group . sort $ lists
+showPairs :: (Ord a, Show a) => HaskovMatrix a -> String
+showPairs haskov = show . rowColPairs $ haskov
 
-isStartWord :: Text -> Bool
-isStartWord word = if isUpper (Text.head word) then True else False
+rowColValue :: (Ord a) => HaskovMatrix a -> (a, a) -> Float
+rowColValue (HaskovMatrix hmap hmatrix) (i, j) =
+    getElem (hmap ! i) (hmap ! j) hmatrix 
 
-isEndWord :: Text -> Bool
-isEndWord word = if find isEnd word == Nothing then False else True
-
-isEnd :: Char -> Bool
-isEnd '.' = True
-isEnd '!' = True
-isEnd '?' = True
-isEnd _   = False
-
-handler :: IOError -> IO()
-handler e
-    | isDoesNotExistError e = putStrLn "Parse Error: file does not exist"
-    | isUserError         e = putStrLn "Parse Error: user error on input"
-    | isAlreadyInUseError e = putStrLn "Parse Error: file already in use"
-    | otherwise             = ioError e
+rowColPairs :: (Ord a) => HaskovMatrix a -> [(a, a)]
+rowColPairs (HaskovMatrix hmap hmatrix) = 
+    [(i, j) | i <- (keys hmap), j <- (keys hmap)]
+    
