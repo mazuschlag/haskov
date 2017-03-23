@@ -66,11 +66,13 @@ walk haskov n = do
 walker :: (Ord a) => Markov a -> Int -> Maybe a -> StdGen -> [a]
 walker _ _ Nothing _ = []
 walker _ 0 _ _ = []
-walker (Markov hmap hmatrix) n (Just s) gen = 
-    let rand = random gen
+walker (Markov hmap hmatrix) n (Just s) gen
+    | (Vec.foldl (+) 0 row) == 0 = []
+    | otherwise = choice : walker (Markov hmap hmatrix) (n-1) (Just choice) (snd rand) 
+    where 
+        rand = random gen
         row = Mat.getRow (hmap ! s) hmatrix
         choice = keys hmap !! randomStep row (fst rand) 0.0 0
-    in choice : walker (Markov hmap hmatrix) (n-1) (Just choice) (snd rand)    
         
 randomStep :: Vector Double -> Double -> Double -> Int -> Int
 randomStep vec rand total i 
