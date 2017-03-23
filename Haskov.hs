@@ -66,34 +66,19 @@ walk haskov n = do
 walker :: (Ord a) => Markov a -> Int -> Maybe a -> StdGen -> [a]
 walker _ _ Nothing _ = []
 walker _ 0 _ _ = []
-walker (Markov hmap hmatrix) n (Just s) gen =
-    let row = Mat.getRow (hmap ! s) hmatrix
-        rand = randomR (0, 1000000000) gen :: (Double, StdGen)
-        prob = (fst rand) * 0.000000001
-        choice = Vec.foldl (\acc x -> if (abs x) < acc then x else acc) 1.0 (Vec.map (subtract prob) row)
-        options = Vec.filter ((\x y -> (snd y) == x) prob) (Vec.zip (Vec.fromList . keys $ hmap) (Vec.map (subtract choice) row))
-        index = randomR (0, (Vec.length options)-1) (snd rand) :: (Int, StdGen)
-        value = fst (options Vec.! (fst index))
-    in value : walker (Markov hmap hmatrix) (n-1) (Just value) (snd index) 
-
-testwalk :: (Ord a) => Markov a -> Int -> IO [a]
-testwalk haskov n = do 
-    gen <- getStdGen
-    let rand = randomR (0, (size haskov) - 1) gen :: (Int, StdGen)
-        start = Vec.fromList (states haskov) !? 0
-    return (testwalker haskov n start (snd rand))
-
-testwalker :: (Ord a) => Markov a -> Int -> Maybe a -> StdGen -> [a]
-testwalker (Markov hmap hmatrix) n (Just s) gen =
-    let row = Mat.getRow (hmap ! s) hmatrix
-        rand = randomR (0, 1000000000) gen :: (Double, StdGen)
-        --prob = (fst rand) * 0.000000001
-        prob = 0.6
-        choice = Vec.foldl (\acc x -> if (abs x) < acc then x else acc) 1.0 (Vec.map (subtract prob) row)
-        options = Vec.filter ((\x y -> (snd y) == x) prob) (Vec.zip (Vec.fromList . keys $ hmap) (Vec.map (subtract choice) row))
-        index = randomR (0, (Vec.length options)-1) (snd rand) :: (Int, StdGen)
-        value = fst (options Vec.! (fst index))
-    in value : testwalker (Markov hmap hmatrix) (n-1) (Just value) (snd index) 
+walker (Markov hmap hmatrix) n (Just s) gen = 
+    let rand = random gen
+        row = Mat.getRow (hmap ! s) hmatrix
+        choice = keys hmap !! randomStep row (fst rand) 0.0 0
+    in choice : walker (Markov hmap hmatrix) (n-1) (Just choice) (snd rand)    
+        
+randomStep :: Vector Double -> Double -> Double -> Int -> Int
+randomStep vec rand total i 
+    | newTotal < rand = randomStep vec rand newTotal newI
+    | otherwise       = i
+    where
+        newTotal = total + (vec Vec.! i)
+        newI = (i + 1) `mod` (Vec.length vec)
 
 -- Lists --    
 toList :: (Ord a) => Markov a -> [((a, a), Double)]
@@ -123,7 +108,7 @@ hmatrixInsert :: (Ord a) => a -> a -> Double -> Matrix Double -> Map a Int -> Ma
 hmatrixInsert i j n hmatrix hmap
     | mapSize > matrixSize =
         setElem n (hmap ! i, hmap ! j) (extendTo 0 mapSize mapSize hmatrix)
-    | otherwise = setElem n (hmap ! i, hmap ! j) hmatrix
+    | otherwise            = setElem n (hmap ! i, hmap ! j) hmatrix
     where
         mapSize = Map.size hmap
         matrixSize = Mat.nrows hmatrix
