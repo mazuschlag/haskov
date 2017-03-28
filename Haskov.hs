@@ -1,24 +1,24 @@
 module Haskov where
 
-import System.Random    
-import Data.Matrix (Matrix, extendTo, setElem, getElem)
-import qualified Data.Matrix as Mat
-import Data.Map.Strict (Map, (!), keys)
+import System.Random
+import Data.Map.Strict (Map, keys)
 import qualified Data.Map.Strict as Map
 import Data.Vector (Vector, (!?))
 import qualified Data.Vector as Vec
-
+import qualified Numeric.Container as Con
+import Numeric.LinearAlgebra.Data (Matrix)
+import qualified Numeric.LinearAlgebra.Data as Lin
 -- Markov Type --
 data Markov a = Markov { hmap :: Map a Int
                                      , hmatrix :: Matrix Double }
                                      
-instance (Show a, Ord a) => Show (Markov a) where 
-    show haskov = show $ toList haskov 
+--instance (Show a, Ord a) => Show (Markov a) where 
+--    show haskov = show $ toList haskov 
 
 -- Query --
 lookUp :: (Ord a) => a -> a -> Markov a -> Maybe Double
 lookUp i j (Markov hmap hmatrix)
-    | hasI && hasJ = Just (getElem (hmap ! i) (hmap ! j) hmatrix)
+    | hasI && hasJ = Just (hmatrix Lin.! (hmap Map.! i) Lin.! (hmap Map.! j))
     | otherwise    = Nothing
     where
         hasI = Map.member i hmap
@@ -41,100 +41,62 @@ notMember i j haskov = not (member i j haskov)
 states :: (Ord a) => Markov a -> [a]
 states (Markov hmap hmatrix) = keys hmap
 
--- Construction --         
+-- Construction --
 empty :: Markov a
-empty = Markov (Map.empty) (Mat.zero 0 0)
+empty = Markov (Map.empty) (Lin.matrix 0 [])
 
-singleton :: (Ord a) => a -> Double -> Markov a
-singleton a n = 
-    Markov (Map.singleton a 1) (Mat.matrix 1 1 (\(i,j) -> n))
+-- Lists --
+fromList :: (Ord a) => [(a, [Double])] -> Markov a
+fromList list = 
+    let hmap = tohmap (fst . unzip $ list) 0 
+        hmatrix = Lin.fromLists . snd . unzip $ list
+    in  Markov hmap hmatrix
+    where 
+        tohmap [] n = Map.empty
+        tohmap (i:sublist) n = Map.insert i n (tohmap sublist (n+1))
 
--- insert --
-insert :: (Ord a) => a -> a -> Double -> Markov a -> Markov a
-insert i j n (Markov hmap hmatrix) =
-    let newMap = hmapInsert i j hmap
-    in Markov (newMap) (hmatrixInsert i j n hmatrix newMap)
-
+toList :: (Ord a) => Markov a -> [(a, [Double])]
+toList (Markov hmap hmatrix) = 
+    let k = keys hmap
+        d = Lin.toLists hmatrix
+    in zip k d
+        
 -- Chains -- 
 walk :: (Ord a) => Markov a -> Int -> IO [a]
 walk haskov n = do 
     gen <- getStdGen
     let rand = randomR (0, (size haskov) - 1) gen :: (Int, StdGen)
         start = Vec.fromList (states haskov) !? (fst rand)
-    return (walker haskov n start (snd rand))
+    return (steps haskov n start (snd rand))
 
-walker :: (Ord a) => Markov a -> Int -> Maybe a -> StdGen -> [a]
-walker _ _ Nothing _ = []
-walker _ 0 _ _ = []
-walker (Markov hmap hmatrix) n (Just s) gen
-    | (Vec.foldl (+) 0 row) == 0 = []
-    | otherwise = choice : walker (Markov hmap hmatrix) (n-1) (Just choice) (snd rand) 
+steps :: (Ord a) => Markov a -> Int -> Maybe a -> StdGen -> [a]
+steps _ _ Nothing _ = []
+steps _ 0 _ _ = []
+steps (Markov hmap hmatrix) n (Just s) gen
+    | (Con.sumElements row) == 0 = []
+    | otherwise = choice : steps (Markov hmap hmatrix) (n-1) (Just choice) (snd rand) 
     where 
         rand = random gen
-        row = Mat.getRow (hmap ! s) hmatrix
+        row = hmatrix Lin.? [hmap Map.! s]
         choice = keys hmap !! randomStep row (fst rand) 0.0 0
         
-randomStep :: Vector Double -> Double -> Double -> Int -> Int
-randomStep vec rand total i 
-    | newTotal < rand = randomStep vec rand newTotal newI
-    | otherwise       = i
+randomStep :: Matrix Double -> Double -> Double -> Int -> Int
+randomStep row rand total j
+    | newTotal < rand = randomStep row rand newTotal newJ
+    | otherwise       = j
     where
-        newTotal = total + (vec Vec.! i)
-        newI = (i + 1) `mod` (Vec.length vec)
-
--- Lists --    
-toList :: (Ord a) => Markov a -> [((a, a), Double)]
-toList haskov =
-    let pairs = rowColPairs haskov
-        values = map (rowColValue haskov) pairs
-    in zip pairs values
-
-fromList :: (Ord a) => [((a, a), Double)] -> Markov a
-fromList [] = empty
-fromList tuples = foldl (\acc x -> insert (fst . fst $ x) (snd . fst $ x) (snd x) acc) empty tuples
-        
--- Helper Functions --
-hmapInsert :: (Ord a) => a -> a -> Map a Int -> Map a Int
-hmapInsert i j hmap
-    | hasI && (not hasJ) = Map.insert j (mapSize+1) hmap 
-    | (not hasI) && hasJ = Map.insert i (mapSize+1) hmap
-    | (not hasI) && (not hasJ) = 
-        Map.insert j (mapSize+1) (Map.insert i (mapSize+1) hmap)
-    | otherwise = hmap
-    where
-        mapSize = Map.size hmap
-        hasI = Map.member i hmap
-        hasJ = Map.member j hmap
-    
-hmatrixInsert :: (Ord a) => a -> a -> Double -> Matrix Double -> Map a Int -> Matrix Double
-hmatrixInsert i j n hmatrix hmap
-    | mapSize > matrixSize =
-        setElem n (hmap ! i, hmap ! j) (extendTo 0 mapSize mapSize hmatrix)
-    | otherwise            = setElem n (hmap ! i, hmap ! j) hmatrix
-    where
-        mapSize = Map.size hmap
-        matrixSize = Mat.nrows hmatrix
-
-showPairs :: (Ord a, Show a) => Markov a -> String
-showPairs haskov = show . rowColPairs $ haskov
-
-rowColValue :: (Ord a) => Markov a -> (a, a) -> Double
-rowColValue (Markov hmap hmatrix) (i, j) =
-    getElem (hmap ! i) (hmap ! j) hmatrix 
-
-rowColPairs :: (Ord a) => Markov a -> [(a, a)]
-rowColPairs (Markov hmap hmatrix) = 
-    [(i, j) | i <- (keys hmap), j <- (keys hmap)]
-    
-    
-{-  Steady State: 
+        newTotal = total + (row Lin.! 0 Lin.! j)
+        newJ = (j + 1) `mod` (Lin.cols row)
+{-    
+Steady State: 
     1. m = number of states (keys of hmap)
     2. P = hmatrix
     3. Q = tanspose (Identity matrix size m - P), Q[0,0] += machine epsilon
     4. e = array of zeros size m, where last element is 1.0
     5. x = solve sparse linear system of Q and e (Ax = b), divided by the sum of its values
     6. match x values to corresponding states (keys)
-    Note - Numeric.LinearAlgebra seems necessary    
--}    
+    Note - Numeric.LinearAlgebra seems necessary
+-} 
+
     
     
