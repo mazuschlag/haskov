@@ -126,3 +126,15 @@ rowColPairs :: (Ord a) => Markov a -> [(a, a)]
 rowColPairs (Markov hmap hmatrix) = 
     [(i, j) | i <- (keys hmap), j <- (keys hmap)]
     
+    
+{-  Steady State: 
+    1. m = number of states (keys of hmap)
+    2. P = hmatrix
+    3. Q = tanspose (Identity matrix size m - P), Q[0,0] += machine epsilon
+    4. e = array of zeros size m, where last element is 1.0
+    5. x = solve sparse linear system of Q and e (Ax = b), divided by the sum of its values
+    6. match x values to corresponding states (keys)
+    Note - Numeric.LinearAlgebra seems necessary    
+-}    
+    
+    
