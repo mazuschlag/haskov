@@ -5,15 +5,21 @@ import Data.Map.Strict (Map, keys)
 import qualified Data.Map.Strict as Map
 import Data.Vector (Vector, (!?))
 import qualified Data.Vector as Vec
+import Numeric.Container (sub, scale)
 import qualified Numeric.Container as Con
-import Numeric.LinearAlgebra.Data (Matrix)
+import Numeric.LinearAlgebra.Data (Matrix, matrix, col, ident, tr)
 import qualified Numeric.LinearAlgebra.Data as Lin
+import Numeric.LinearAlgebra.Algorithms (linearSolve)
+import qualified Numeric.LinearAlgebra.Algorithms as Alg
+import Numeric.LinearAlgebra.HMatrix (sumElements)
+import qualified Numeric.LinearAlgebra.HMatrix as Hma
+
 -- Markov Type --
 data Markov a = Markov { hmap :: Map a Int
                                      , hmatrix :: Matrix Double }
                                      
---instance (Show a, Ord a) => Show (Markov a) where 
---    show haskov = show $ toList haskov 
+instance (Show a, Ord a) => Show (Markov a) where 
+    show haskov = "fromList " ++ (show $ toList haskov) 
 
 -- Query --
 lookUp :: (Ord a) => a -> a -> Markov a -> Maybe Double
@@ -43,7 +49,7 @@ states (Markov hmap hmatrix) = keys hmap
 
 -- Construction --
 empty :: Markov a
-empty = Markov (Map.empty) (Lin.matrix 0 [])
+empty = Markov (Map.empty) (matrix 0 [])
 
 -- Lists --
 fromList :: (Ord a) => [(a, [Double])] -> Markov a
@@ -87,16 +93,16 @@ randomStep row rand total j
     where
         newTotal = total + (row Lin.! 0 Lin.! j)
         newJ = (j + 1) `mod` (Lin.cols row)
-{-    
-Steady State: 
-    1. m = number of states (keys of hmap)
-    2. P = hmatrix
-    3. Q = tanspose (Identity matrix size m - P), Q[0,0] += machine epsilon
-    4. e = array of zeros size m, where last element is 1.0
-    5. x = solve sparse linear system of Q and e (Ax = b), divided by the sum of its values
-    6. match x values to corresponding states (keys)
-    Note - Numeric.LinearAlgebra seems necessary
--} 
+        
+steady :: (Ord a) => Markov a -> [(a, Double)]
+steady (Markov hmap hmatrix) =
+    let m = length . keys $ hmap -- Number of states
+        q = tr $ sub (ident m) hmatrix -- Transpose (I-matrix size m - hmatrix)
+        e = col ((replicate (m-1) 0) ++ [1]) -- col of zeros size m, last element is 1.0
+        x = linearSolve q e -- Solve linear system of Q and e (Qx = e)
+        y = scale (1 / (sumElements x)) x  -- Divide x by sum of elements
+    in zip (keys hmap) (concat . Lin.toLists $ y) -- Zip solutions with states
 
-    
-    
+-- Machine Epsilon    
+machineE :: Double
+machineE = until ((== 1) . (+1)) (/2) 1
