@@ -71,20 +71,17 @@ toList (Markov hmap hmatrix) =
 walk :: (Ord a) => Markov a -> Int -> IO [a]
 walk haskov n = do 
     gen <- getStdGen
-    let rand = randomR (0, (size haskov) - 1) gen :: (Int, StdGen)
-        start = Vec.fromList (states haskov) !? (fst rand)
-    return (steps haskov n start (snd rand))
-
-steps :: (Ord a) => Markov a -> Int -> Maybe a -> StdGen -> [a]
-steps _ _ Nothing _ = []
-steps _ 0 _ _ = []
-steps (Markov hmap hmatrix) n (Just s) gen
-    | (Con.sumElements row) == 0 = []
-    | otherwise = choice : steps (Markov hmap hmatrix) (n-1) (Just choice) (snd rand) 
+    return (steps haskov (tr . steady $ haskov) n gen)
+    
+steps :: (Ord a) => Markov a -> Matrix Double -> Int -> StdGen -> [a]
+steps _ _ 0 _ = []
+steps (Markov hmap hmatrix) row n gen
+    | (sumElements row) == 0 = []
+    | otherwise = choice : steps (Markov hmap hmatrix) newRow (n-1) (snd rand) 
     where 
         rand = random gen
-        row = hmatrix Lin.? [hmap Map.! s]
         choice = keys hmap !! randomStep row (fst rand) 0.0 0
+        newRow = hmatrix Lin.? [(hmap Map.! choice)]
         
 randomStep :: Matrix Double -> Double -> Double -> Int -> Int
 randomStep row rand total j
@@ -94,14 +91,16 @@ randomStep row rand total j
         newTotal = total + (row Lin.! 0 Lin.! j)
         newJ = (j + 1) `mod` (Lin.cols row)
         
-steady :: (Ord a) => Markov a -> [(a, Double)]
+steadyState :: (Ord a) =>  Markov a -> [(a, Double)]
+steadyState haskov = zip (states haskov) (concat . Lin.toLists $ steady haskov)
+        
+steady :: (Ord a) => Markov a -> Matrix Double
 steady (Markov hmap hmatrix) =
     let m = length . keys $ hmap -- Number of states
         q = tr $ sub (ident m) hmatrix -- Transpose (I-matrix size m - hmatrix)
         e = col ((replicate (m-1) 0) ++ [1]) -- col of zeros size m, last element is 1.0
         x = linearSolve q e -- Solve linear system of Q and e (Qx = e)
-        y = scale (1 / (sumElements x)) x  -- Divide x by sum of elements
-    in zip (keys hmap) (concat . Lin.toLists $ y) -- Zip solutions with states
+    in  scale (1 / (sumElements x)) x  -- Divide x by sum of elements
 
 -- Machine Epsilon    
 machineE :: Double
