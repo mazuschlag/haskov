@@ -3,15 +3,13 @@ module Haskov where
 import System.Random
 import Data.Map.Strict (Map, keys)
 import qualified Data.Map.Strict as Map
-import Data.Vector (Vector, (!?))
-import qualified Data.Vector as Vec
 import Numeric.Container (sub, scale)
 import qualified Numeric.Container as Con
-import Numeric.LinearAlgebra.Data (Matrix, matrix, col, ident, tr)
+import Numeric.LinearAlgebra.Data (Matrix, matrix, col, cols,ident, tr)
 import qualified Numeric.LinearAlgebra.Data as Lin
-import Numeric.LinearAlgebra.Algorithms (linearSolve)
+import Numeric.LinearAlgebra.Algorithms (luSolve, luPacked)
 import qualified Numeric.LinearAlgebra.Algorithms as Alg
-import Numeric.LinearAlgebra.HMatrix (sumElements)
+import Numeric.LinearAlgebra.HMatrix (sumElements, cmap)
 import qualified Numeric.LinearAlgebra.HMatrix as Hma
 
 -- Markov Type --
@@ -81,7 +79,7 @@ steps (Markov hmap hmatrix) row n gen
     where 
         rand = random gen
         choice = keys hmap !! randomStep row (fst rand) 0.0 0
-        newRow = hmatrix Lin.? [(hmap Map.! choice)]
+        newRow = normalize $ hmatrix Lin.? [(hmap Map.! choice)]
         
 randomStep :: Matrix Double -> Double -> Double -> Int -> Int
 randomStep row rand total j
@@ -89,7 +87,7 @@ randomStep row rand total j
     | otherwise       = j
     where
         newTotal = total + (row Lin.! 0 Lin.! j)
-        newJ = (j + 1) `mod` (Lin.cols row)
+        newJ = (j + 1) `mod` (cols row)
         
 steadyState :: (Ord a) =>  Markov a -> [(a, Double)]
 steadyState haskov = zip (states haskov) (concat . Lin.toLists $ steady haskov)
@@ -99,8 +97,11 @@ steady (Markov hmap hmatrix) =
     let m = length . keys $ hmap -- Number of states
         q = tr $ sub (ident m) hmatrix -- Transpose (I-matrix size m - hmatrix)
         e = col ((replicate (m-1) 0) ++ [1]) -- col of zeros size m, last element is 1.0
-        x = linearSolve q e -- Solve linear system of Q and e (Qx = e)
+        x = luSolve (luPacked q) e -- Solve linear system of Q and e (Qx = e)
     in  scale (1 / (sumElements x)) x  -- Divide x by sum of elements
+
+normalize :: Matrix Double -> Matrix Double
+normalize hmatrix = cmap (/ (sumElements hmatrix)) hmatrix 
 
 -- Machine Epsilon    
 machineE :: Double
