@@ -3,12 +3,10 @@ module Haskov where
 import System.Random
 import Data.Map.Strict (Map, keys)
 import qualified Data.Map.Strict as Map
-import Numeric.Container (sub, scale)
-import qualified Numeric.Container as Con
+import Numeric.LinearAlgebra (scale, luSolve, luPacked)
+import qualified Numeric.LinearAlgebra as Lin
 import Numeric.LinearAlgebra.Data (Matrix, matrix, col, cols, ident, tr, accum)
-import qualified Numeric.LinearAlgebra.Data as Lin
-import Numeric.LinearAlgebra.Algorithms (luSolve, luPacked)
-import qualified Numeric.LinearAlgebra.Algorithms as Alg
+import qualified Numeric.LinearAlgebra.Data as Dat
 import Numeric.LinearAlgebra.HMatrix (sumElements, cmap)
 import qualified Numeric.LinearAlgebra.HMatrix as Hma
 
@@ -20,6 +18,7 @@ instance (Show a, Ord a) => Show (Markov a) where
     show haskov = "fromList " ++ (show $ toList haskov) 
 
 -- Query --
+
 -- Safe query
 lookup :: (Ord a) => a -> a -> Markov a -> Maybe Double
 lookup i j (Markov imap hmap) = Map.lookup (i, j) hmap
@@ -50,6 +49,7 @@ statesI :: (Ord a) => Markov a -> Map a Int
 statesI (Markov imap hmap) = imap
 
 -- Construction --
+
 empty :: Markov a
 empty = Markov (Map.empty) (Map.empty)
 
@@ -66,19 +66,29 @@ fromList list =
 toList :: (Ord a) => Markov a -> [((a, a), Double)]
 toList (Markov imap hmap) = Map.toList hmap
 
+-- Maps --
+
+fromMap :: (Ord a) => Map (a, a) Double -> Markov a
+fromMap mapp = 
+    let hmap = mapp
+        klist = map fst (keys mapp)
+        imap = foldl (\acc x -> if Map.notMember x acc then Map.insert x (Map.size acc) acc else acc) Map.empty klist
+    in Markov imap hmap
+
 -- Matrices --
+
 hmatrix :: (Ord a) => Markov a -> Matrix Double
 hmatrix (Markov imap hmap) =
     let m = Map.size imap
         zeros = matrix m (replicate (m*m) 0)
         hlist = map (el2I imap) (Map.toList hmap)
-    in  Lin.accum zeros (+) hlist
+    in  Dat.accum zeros (+) hlist
 
 el2I :: (Ord a) => Map a Int -> ((a, a), Double) -> ((Int, Int), Double)
 el2I imap ((i, j), d) = ((imap Map.! i, imap Map.! j), d)  
 
-
 -- Chains -- 
+
 walk :: (Ord a) => Markov a -> Int -> IO [a]
 walk haskov n = do 
     gen <- getStdGen
@@ -94,23 +104,23 @@ steps imap mat row n gen
     where 
         rand = random gen
         choice = keys imap !! randomStep row (fst rand) 0.0 0
-        newRow = normalize $ mat Lin.? [(imap Map.! choice)]
+        newRow = normalize $ mat Dat.? [(imap Map.! choice)]
         
 randomStep :: Matrix Double -> Double -> Double -> Int -> Int
 randomStep row rand total j
     | newTotal < rand = randomStep row rand newTotal newJ
     | otherwise       = j
     where
-        newTotal = total + (row Lin.! 0 Lin.! j)
+        newTotal = total + (row Dat.! 0 Dat.! j)
         newJ = (j + 1) `mod` (cols row)
         
 steadyState :: (Ord a) =>  Markov a -> [(a, Double)]
-steadyState haskov = zip (states haskov) (concat . Lin.toLists $ steady (hmatrix haskov))
+steadyState haskov = zip (states haskov) (concat . Dat.toLists $ steady (hmatrix haskov))
         
 steady :: Matrix Double -> Matrix Double
 steady mat =
-    let m = Lin.rows mat -- Number of states
-        q = tr $ sub (ident m) mat -- Transpose (I-matrix size m - hmatrix)
+    let m = Dat.rows mat -- Number of states
+        q = tr $ ident m - mat -- Transpose (I-matrix size m - hmatrix)
         e = col ((replicate (m-1) 0) ++ [1.0]) -- col of zeros size m, last element is 1.0
         x = luSolve (luPacked q) e -- Solve linear system of Q and e (Qx = e)
     in  scale (1 / (sumElements x)) x  -- Divide x by sum of elements
@@ -118,6 +128,7 @@ steady mat =
 normalize :: Matrix Double -> Matrix Double
 normalize hmatrix = cmap (/ (sumElements hmatrix)) hmatrix 
 
--- Machine Epsilon    
+-- Machine Epsilon --
+
 machineE :: Double
 machineE = until ((== 1) . (+1)) (/2) 1
