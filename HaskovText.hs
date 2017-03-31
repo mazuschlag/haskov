@@ -6,11 +6,15 @@ import System.Environment
 import System.Random
 
 import Data.Char (isUpper)
-import Data.List (group, sort)
-import Data.Text (Text, pack, unpack, empty, splitOn, concat, find)
-import qualified Data.Text as Text
+import Data.Text (Text, pack, unpack, splitOn, concat, find)
+import qualified Data.Text as Tex
 import Data.Map.Strict (Map, (!), lookup, fromList, size)
 import qualified Data.Map.Strict as Map
+
+import Haskov (fromMap, walk)
+import qualified Haskov as Has
+
+type TextMap = Map (Text, Text) Double
 
 main = fromIO `catchIOError` handler
 
@@ -20,43 +24,24 @@ fromIO = do
     contents <- readFile input
     gen <- getStdGen
 
-    let text = Text.words (pack contents)
-        keys = getkeys text
-        table = generate text keys
-        startWords = foldr (\x acc -> if isStartWord x then x:acc else acc) [] keys
-        startIndex = randomR (0, (length startWords) - 1) gen :: (Int, StdGen)
-        firstWord = startWords !! (fst startIndex)
+    let text = Tex.words (pack contents)
+        tm = generate (tail text) (head text) Map.empty
+        haskov1 = fromMap tm
+    --haskov2 = Has.hmatrix haskov1
+    chain <- walk haskov1 10
+    --putStrLn $ show . Has.size $ haskov
+    --putStrLn $ show chain
+    --putStrLn $ show haskov1
+    --putStrLn $ show (Has.statesI haskov1)
+    putStrLn $ show . Has.steadyState $ haskov1
+    putStrLn $ show chain
 
-    putStrLn $ unpack . Text.concat $ walk table firstWord (snd startIndex)
-
-walk :: Map Text [Text] -> Text -> StdGen -> [Text]
-walk markovMap key gen
-    | key == empty = []
-    | isEndWord key = key : []
-    | otherwise = (key : (pack " ") : walk markovMap word (snd r))
-    where
-        r = randomR (0, (length (markovMap ! key)) - 1) gen :: (Int, StdGen)
-        word = (markovMap ! key) !! (fst r)
-
-generate :: [Text] -> [Text] -> Map Text [Text]
-generate lists keys = fromList (map makeKeyChain keys)
-    where makeKeyChain key = (key, (chain key empty lists))
-
-chain :: Text -> Text -> [Text] -> [Text]
-chain _ _ [] = []
-chain key curr (next:list)
-    | curr == key = next : chain key next list
-    | otherwise   = chain key next list
-
-toFile :: Map Text [Text] -> String -> IO()
-toFile tmap filename = do
-    writeFile filename (show tmap)
-
-getkeys :: [Text] -> [Text]
-getkeys lists = map head . group . sort $ lists
+generate :: [Text] -> Text -> TextMap -> TextMap
+generate [] prev tm = Map.insertWith (+) (prev, Tex.empty) 1 tm
+generate (curr:tl) prev tm = generate tl curr (Map.insertWith (+) (prev, curr) 1 tm)
 
 isStartWord :: Text -> Bool
-isStartWord word = if isUpper (Text.head word) then True else False
+isStartWord word = if isUpper (Tex.head word) then True else False
 
 isEndWord :: Text -> Bool
 isEndWord word = if find isEnd word == Nothing then False else True
