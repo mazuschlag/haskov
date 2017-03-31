@@ -37,7 +37,7 @@ fromIO = do
     putStrLn $ show chain
 
 generate :: [Text] -> Text -> TextMap -> TextMap
-generate [] prev tm = Map.insertWith (+) (prev, Tex.empty) 1 tm
+generate [] prev tm = Map.insertWith (+) (prev, prev) 0 tm
 generate (curr:tl) prev tm = generate tl curr (Map.insertWith (+) (prev, curr) 1 tm)
 
 isStartWord :: Text -> Bool
