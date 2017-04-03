@@ -11,8 +11,8 @@ import Numeric.LinearAlgebra.HMatrix (sumElements, cmap)
 import qualified Numeric.LinearAlgebra.HMatrix as Hma
 
 -- Markov Type --
-data Markov a = Markov { imap :: Map a Int
-                                     , hmap :: Map (a, a) Double }
+data Markov a = Markov {  imap :: Map a Int
+                        , hmap :: Map (a, a) Double }
                                      
 instance (Show a, Ord a) => Show (Markov a) where 
     show haskov = "fromList " ++ (show $ toList haskov) 
@@ -53,8 +53,18 @@ statesI (Markov imap hmap) = imap
 empty :: Markov a
 empty = Markov (Map.empty) (Map.empty)
 
---insert :: (Ord a) => a -> a -> Double -> Markov a -> Markov a
-
+insert :: (Ord a) => a -> a -> Double -> Markov a -> Markov a
+insert i j n (Markov imap hmap) 
+    | hasI && (not hasJ) = Markov (Map.insert j s imap) newhmap
+    | (not hasI) && hasJ = Markov (Map.insert i s imap) newhmap 
+    | (not hasI) && (not hasJ) = Markov (Map.insert j (s+1) (Map.insert i s imap)) newhmap
+    | otherwise          = Markov imap newhmap
+    where
+        newhmap = Map.insert (i, j) n hmap
+        hasI = Map.member i imap
+        hasJ = Map.member j imap
+        s = Map.size imap
+        
 -- Lists --
 fromList :: (Ord a) => [((a, a), Double)] -> Markov a
 fromList list = 
@@ -104,7 +114,7 @@ steps imap mat row n gen
     where 
         rand = random gen
         choice = keys imap !! randomStep row (fst rand) 0.0 0
-        newRow = normalize $ mat Dat.? [(imap Map.! choice)]
+        newRow = norm $ mat Dat.? [(imap Map.! choice)]
         
 randomStep :: Matrix Double -> Double -> Double -> Int -> Int
 randomStep row rand total j
@@ -125,8 +135,11 @@ steady mat =
         x = luSolve (luPacked q) e -- Solve linear system of Q and e (Qx = e)
     in  scale (1 / (sumElements x)) x  -- Divide x by sum of elements
 
-normalize :: Matrix Double -> Matrix Double
-normalize hmatrix = cmap (/ (sumElements hmatrix)) hmatrix 
+--normalize :: (Ord a) => Markov a -> Markov a
+--normalize haskov = norm . hmatrix $ haskov
+
+norm :: Matrix Double -> Matrix Double
+norm hmatrix = cmap (/ (sumElements hmatrix)) hmatrix 
 
 -- Machine Epsilon --
 
