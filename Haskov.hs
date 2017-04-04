@@ -1,7 +1,10 @@
 module Haskov where
 
 import System.Random
-import Data.Map.Strict (Map, keys)
+import Data.List (foldl')
+import Data.Sequence (Seq, (|>), lookup)
+import qualified Data.Sequence as Seqq
+import Data.Map.Strict (Map, keys, foldlWithKey', mapWithKey)
 import qualified Data.Map.Strict as Map
 import Numeric.LinearAlgebra (scale, luSolve, luPacked)
 import qualified Numeric.LinearAlgebra as Lin
@@ -11,18 +14,23 @@ import Numeric.LinearAlgebra.HMatrix (sumElements, cmap)
 import qualified Numeric.LinearAlgebra.HMatrix as Hma
 
 -- Markov Type --
-data Markov a = Markov {  imap :: Map a Int
-                        , hmap :: Map (a, a) Double }
-                                     
-instance (Show a, Ord a) => Show (Markov a) where 
-    show haskov = "fromList " ++ (show $ toList haskov) 
+type IndexMap a = Map a Int
+type HMatrixMap = Map (Int, Int) Double
+
+data Markov a = Markov {  imap :: IndexMap
+                        , hmap :: HMatrixMap }
+
+--instance (Show a, Ord a) => Show (Markov a) where 
+--    show haskov = "fromList " ++ (show $ toList haskov) 
 
 -- Query --
 
 -- Safe query
 lookup :: (Ord a) => a -> a -> Markov a -> Maybe Double
-lookup i j (Markov imap hmap) = Map.lookup (i, j) hmap
-
+lookup i j (Markov imap hmap) 
+    | (Map.member i imap) && (Map.member j imap) = Just (hmap Map.! ((imap Map.!i), (imap Map.! j))) 
+    | otherwise                                  = Nothing
+    
 -- Returns number of states
 size :: (Ord a) => Markov a -> Int
 size (Markov imap hmap) = Map.size imap
@@ -45,7 +53,7 @@ notMember i haskov = not (member i haskov)
 states :: (Ord a) => Markov a -> [a]
 states (Markov imap hmap) = keys imap
 
-statesI :: (Ord a) => Markov a -> Map a Int
+statesI :: (Ord a) => Markov a -> IndexMap
 statesI (Markov imap hmap) = imap
 
 -- Construction --
@@ -55,12 +63,11 @@ empty = Markov (Map.empty) (Map.empty)
 
 insert :: (Ord a) => a -> a -> Double -> Markov a -> Markov a
 insert i j n (Markov imap hmap) 
-    | hasI && (not hasJ) = Markov (Map.insert j s imap) newhmap
-    | (not hasI) && hasJ = Markov (Map.insert i s imap) newhmap 
-    | (not hasI) && (not hasJ) = Markov (Map.insert j (s+1) (Map.insert i s imap)) newhmap
-    | otherwise          = Markov imap newhmap
+    | hasI && (not hasJ) = Markov (Map.insert j s imap) (Map.insert (imap Map.! i, s) n hmap) 
+    | (not hasI) && hasJ = Markov (Map.insert i s imap) (Map.insert (s, imap Map.! j) n hmap) 
+    | (not hasI) && (not hasJ) = Markov (Map.insert j (s+1) (Map.insert i s imap)) (Map.insert (s, (s+1)) n hmap)
+    | otherwise          = Markov imap (Map.insert (imap Map.! i, imap Map.! j) n hmap)
     where
-        newhmap = Map.insert (i, j) n hmap
         hasI = Map.member i imap
         hasJ = Map.member j imap
         s = Map.size imap
@@ -68,22 +75,41 @@ insert i j n (Markov imap hmap)
 -- Lists --
 fromList :: (Ord a) => [((a, a), Double)] -> Markov a
 fromList list = 
-    let hmap = Map.fromList list
-        klist = map (fst . fst) list
-        imap = foldl (\acc x -> if Map.notMember x acc then Map.insert x (Map.size acc) acc else acc) Map.empty klist
+    let imap = foldl' toimap Map.empty list
+        hmap = foldl' (tohmap imap) Map.empty list
     in Markov imap hmap
 
-toList :: (Ord a) => Markov a -> [((a, a), Double)]
-toList (Markov imap hmap) = Map.toList hmap
+--toList :: (Ord a) => Markov a -> [((a, a), Double)]
+--toList haskov = foldlWithKey' fromMarkov [] haskov 
 
 -- Maps --
 
 fromMap :: (Ord a) => Map (a, a) Double -> Markov a
 fromMap mapp = 
-    let hmap = mapp
-        klist = map fst (keys mapp)
-        imap = foldl (\acc x -> if Map.notMember x acc then Map.insert x (Map.size acc) acc else acc) Map.empty klist
+    let imap = foldlWithKey' toimap' Map.empty mapp
+        hmap = foldlWithKey' (tohmap' imap) Map.empty mapp
     in Markov imap hmap
+
+-- Helpers --
+-- for fromList
+toimap :: (Ord a) => IndexMap -> ((a, a), Double) -> IndexMap
+toimap acc tuple = 
+    if Map.notMember i acc then Map.insert i (Map.size acc) acc else acc
+    where i = fst . fst $ tuple
+
+-- For fromMap
+toimap' :: (Ord a) => IndexMap -> (a, a) -> Double -> IndexMap
+toimap' acc tuple n = 
+    if Map.notMember i acc then Map.insert i (Map.size acc) acc else acc
+    where i = fst tuple
+
+-- For fromList
+tohmap :: (Ord a) => IndexMap -> HMatrixMap -> ((a, a), Double) -> HMatrixMap
+tohmap imap acc ((i, j), n) = Map.insert (imap Map.! i, imap Map.! j) n acc
+
+-- For fromMap
+tohmap' :: (Ord a) => IndexMap -> HMatrixMap -> (a, a) -> Double -> HMatrixMap 
+tohmap' imap acc (i, j) n = Map.insert (imap Map.! i, imap Map.! j) n acc
 
 -- Matrices --
 
@@ -91,11 +117,8 @@ hmatrix :: (Ord a) => Markov a -> Matrix Double
 hmatrix (Markov imap hmap) =
     let m = Map.size imap
         zeros = matrix m (replicate (m*m) 0)
-        hlist = map (el2I imap) (Map.toList hmap)
+        hlist = Map.toList hmap
     in  Dat.accum zeros (+) hlist
-
-el2I :: (Ord a) => Map a Int -> ((a, a), Double) -> ((Int, Int), Double)
-el2I imap ((i, j), d) = ((imap Map.! i, imap Map.! j), d)  
 
 -- Chains -- 
 
@@ -106,7 +129,7 @@ walk haskov n = do
         ss = tr . steady $ mat
     return (steps (statesI haskov) mat ss n gen)
     
-steps :: (Ord a) => Map a Int -> Matrix Double -> Matrix Double -> Int -> StdGen -> [a]
+steps :: (Ord a) => IndexMap -> Matrix Double -> Matrix Double -> Int -> StdGen -> [a]
 steps _ _ _ 0 _ = []
 steps imap mat row n gen
     | (sumElements row) == 0 = []
@@ -134,12 +157,23 @@ steady mat =
         e = col ((replicate (m-1) 0) ++ [1.0]) -- col of zeros size m, last element is 1.0
         x = luSolve (luPacked q) e -- Solve linear system of Q and e (Qx = e)
     in  scale (1 / (sumElements x)) x  -- Divide x by sum of elements
+    
+normalize :: Markov a -> Markov a 
+normalize (Markov imap hmap) = 
+    let ss = foldlWithKey' sumSeq Seqq.empty hmap
+    in mapWithKey (calcNorm ss) hmap
+    
+calcNorm :: Seq Double -> (Int, Int) -> Double -> Double
+calcNorm ss (i, j) n = n / return (Seqq.index i ss)
 
---normalize :: (Ord a) => Markov a -> Markov a
---normalize haskov = norm . hmatrix $ haskov
+sumSeq :: (Int, Int) -> Double -> Seq Double -> Seq Double
+sumSeq (i, j) n s = 
+    if Seqq.lookup i s == Nothing 
+    then s |> n
+    else Seqq.adjust (+n) i s
 
 norm :: Matrix Double -> Matrix Double
-norm hmatrix = cmap (/ (sumElements hmatrix)) hmatrix 
+norm row = cmap (/ (sumElements row)) row 
 
 -- Machine Epsilon --
 
