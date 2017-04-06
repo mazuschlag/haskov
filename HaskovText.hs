@@ -1,7 +1,7 @@
 module HaskovText where
 
 import Data.Char (isUpper)
-import Data.Text (Text, pack, unpack, splitOn, concat, find)
+import Data.Text (Text, concat, find)
 import qualified Data.Text as Tex
 import Data.Map.Strict (Map, (!), lookup, fromList, size)
 import qualified Data.Map.Strict as Map

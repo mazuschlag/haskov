@@ -21,7 +21,7 @@ data Markov a = Markov {  imap :: IndexMap a
                         , hmap :: HMatrixMap }
 
 instance (Show a, Ord a) => Show (Markov a) where 
-    show haskov = "fromList " ++ (show $ toList haskov) 
+    show haskov = show $ toList haskov 
 
 -- Query --
 
