@@ -79,8 +79,16 @@ fromList list =
         hmap = foldl' (tohmap imap) Map.empty list
     in Markov imap hmap
 
-toList :: (Ord a) => Markov a -> [((Int, Int), Double)]
-toList (Markov imap hmap) = Map.toList hmap 
+toList :: (Ord a) => Markov a -> [((a, a), Double)]
+toList (Markov imap hmap) =
+    let rIMap = foldlWithKey' reverseIMap Map.empty imap
+    in foldlWithKey' (combineImapHmap rIMap) [] hmap
+        
+combineImapHmap :: (Ord a) => Map Int a -> [((a, a), Double)] -> (Int, Int) -> Double -> [((a, a), Double)]
+combineImapHmap rIMap acc (i, j) d = ((rIMap Map.! i, rIMap Map.! j), d) : acc
+
+reverseIMap :: (Ord a) => Map Int a -> a -> Int -> Map Int a
+reverseIMap  m state i = Map.insert i state m
 
 -- Maps --
 
@@ -175,15 +183,10 @@ sumSeq s (i, j) n =
 norm :: Matrix Double -> Matrix Double
 norm row = cmap (/ (sumElements row)) row 
 
--- Display/IO --
-{-
-display :: Markov a -> String
-display (Markov imap hmap) = 
-    let hString = 
+-- Rounding function -- 
+roundDouble :: Double -> Int -> Double
+roundDouble d n = (fromInteger $ round $ d * (10^n)) / (10.0^^n)
 
-toString :: Int -> (Int, Int) -> Double -> String -> String
-toString l (i, j) n s = if 
--}
 -- Machine Epsilon --
 
 machineE :: Double
