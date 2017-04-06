@@ -2,7 +2,7 @@ module Haskov where
 
 import System.Random
 import Data.List (foldl')
-import Data.Sequence (Seq, (|>), lookup)
+import Data.Sequence (Seq, (|>))
 import qualified Data.Sequence as Seqq
 import Data.Map.Strict (Map, keys, foldlWithKey', mapWithKey)
 import qualified Data.Map.Strict as Map
@@ -17,11 +17,11 @@ import qualified Numeric.LinearAlgebra.HMatrix as Hma
 type IndexMap a = Map a Int
 type HMatrixMap = Map (Int, Int) Double
 
-data Markov a = Markov {  imap :: IndexMap
+data Markov a = Markov {  imap :: IndexMap a
                         , hmap :: HMatrixMap }
 
---instance (Show a, Ord a) => Show (Markov a) where 
---    show haskov = "fromList " ++ (show $ toList haskov) 
+instance (Show a, Ord a) => Show (Markov a) where 
+    show haskov = "fromList " ++ (show $ toList haskov) 
 
 -- Query --
 
@@ -53,7 +53,7 @@ notMember i haskov = not (member i haskov)
 states :: (Ord a) => Markov a -> [a]
 states (Markov imap hmap) = keys imap
 
-statesI :: (Ord a) => Markov a -> IndexMap
+statesI :: (Ord a) => Markov a -> IndexMap a
 statesI (Markov imap hmap) = imap
 
 -- Construction --
@@ -79,8 +79,8 @@ fromList list =
         hmap = foldl' (tohmap imap) Map.empty list
     in Markov imap hmap
 
---toList :: (Ord a) => Markov a -> [((a, a), Double)]
---toList haskov = foldlWithKey' fromMarkov [] haskov 
+toList :: (Ord a) => Markov a -> [((Int, Int), Double)]
+toList (Markov imap hmap) = Map.toList hmap 
 
 -- Maps --
 
@@ -92,23 +92,23 @@ fromMap mapp =
 
 -- Helpers --
 -- for fromList
-toimap :: (Ord a) => IndexMap -> ((a, a), Double) -> IndexMap
+toimap :: (Ord a) => IndexMap a -> ((a, a), Double) -> IndexMap a
 toimap acc tuple = 
     if Map.notMember i acc then Map.insert i (Map.size acc) acc else acc
     where i = fst . fst $ tuple
 
 -- For fromMap
-toimap' :: (Ord a) => IndexMap -> (a, a) -> Double -> IndexMap
+toimap' :: (Ord a) => IndexMap a -> (a, a) -> Double -> IndexMap a
 toimap' acc tuple n = 
     if Map.notMember i acc then Map.insert i (Map.size acc) acc else acc
     where i = fst tuple
 
 -- For fromList
-tohmap :: (Ord a) => IndexMap -> HMatrixMap -> ((a, a), Double) -> HMatrixMap
+tohmap :: (Ord a) => IndexMap a -> HMatrixMap -> ((a, a), Double) -> HMatrixMap
 tohmap imap acc ((i, j), n) = Map.insert (imap Map.! i, imap Map.! j) n acc
 
 -- For fromMap
-tohmap' :: (Ord a) => IndexMap -> HMatrixMap -> (a, a) -> Double -> HMatrixMap 
+tohmap' :: (Ord a) => IndexMap a -> HMatrixMap -> (a, a) -> Double -> HMatrixMap 
 tohmap' imap acc (i, j) n = Map.insert (imap Map.! i, imap Map.! j) n acc
 
 -- Matrices --
@@ -129,7 +129,7 @@ walk haskov n = do
         ss = tr . steady $ mat
     return (steps (statesI haskov) mat ss n gen)
     
-steps :: (Ord a) => IndexMap -> Matrix Double -> Matrix Double -> Int -> StdGen -> [a]
+steps :: (Ord a) => IndexMap a -> Matrix Double -> Matrix Double -> Int -> StdGen -> [a]
 steps _ _ _ 0 _ = []
 steps imap mat row n gen
     | (sumElements row) == 0 = []
@@ -137,7 +137,7 @@ steps imap mat row n gen
     where 
         rand = random gen
         choice = keys imap !! randomStep row (fst rand) 0.0 0
-        newRow = norm $ mat Dat.? [(imap Map.! choice)]
+        newRow = mat Dat.? [(imap Map.! choice)]
         
 randomStep :: Matrix Double -> Double -> Double -> Int -> Int
 randomStep row rand total j
@@ -161,20 +161,29 @@ steady mat =
 normalize :: Markov a -> Markov a 
 normalize (Markov imap hmap) = 
     let ss = foldlWithKey' sumSeq Seqq.empty hmap
-    in mapWithKey (calcNorm ss) hmap
+    in Markov imap (mapWithKey (calcNorm ss) hmap)
     
 calcNorm :: Seq Double -> (Int, Int) -> Double -> Double
-calcNorm ss (i, j) n = n / return (Seqq.index i ss)
+calcNorm ss (i, j) n = n / (Seqq.index ss i)
 
-sumSeq :: (Int, Int) -> Double -> Seq Double -> Seq Double
-sumSeq (i, j) n s = 
-    if Seqq.lookup i s == Nothing 
+sumSeq :: Seq Double -> (Int, Int) -> Double -> Seq Double
+sumSeq s (i, j) n = 
+    if Seqq.length s < (i+1) 
     then s |> n
     else Seqq.adjust (+n) i s
 
 norm :: Matrix Double -> Matrix Double
 norm row = cmap (/ (sumElements row)) row 
 
+-- Display/IO --
+{-
+display :: Markov a -> String
+display (Markov imap hmap) = 
+    let hString = 
+
+toString :: Int -> (Int, Int) -> Double -> String -> String
+toString l (i, j) n s = if 
+-}
 -- Machine Epsilon --
 
 machineE :: Double
