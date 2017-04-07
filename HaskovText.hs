@@ -1,19 +1,21 @@
 module HaskovText where
 
 import Data.Char (isUpper)
-import Data.Text (Text, concat, find)
+import Data.Text (Text, find, pack, splitOn)
 import qualified Data.Text as Tex
-import Data.Map.Strict (Map, (!), lookup, fromList, size)
-import qualified Data.Map.Strict as Map
-
-import Haskov (fromMap, walk)
+import Haskov (Markov, insertWith)
 import qualified Haskov as Has
 
-type TextMap = Map (Text, Text) Double
+generate :: Text -> Markov Text
+generate text = 
+    let textList = splitOn (pack " ") text
+    in  if textList == [] 
+        then Has.empty
+        else generator textList (head textList) Has.empty
 
-generate :: [Text] -> Text -> TextMap -> TextMap
-generate [] prev tm = Map.insertWith (+) (prev, prev) 0 tm
-generate (curr:tl) prev tm = generate tl curr (Map.insertWith (+) (prev, curr) 1 tm)
+generator :: [Text] -> Text -> Markov Text -> Markov Text
+generator [] prev has = insertWith (+) prev prev 0 has
+generator (curr:tl) prev has = generator tl curr (insertWith (+) prev curr 1 has)
 
 isStartWord :: Text -> Bool
 isStartWord word = if isUpper (Tex.head word) then True else False
