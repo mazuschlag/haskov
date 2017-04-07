@@ -24,7 +24,7 @@ import MyDirectory.Haskov (Markov)
 import qualified MyDirectory.Haskov as Has
 ```
 
-#### Markov Type
+###Markov Type
 ```Haskell
 data Markov a
 type IndexMap a = Map a Int
@@ -32,7 +32,9 @@ type HMatrixMap = Map ((Int, Int), Double)
 ```
 A Markov chain of states *a* and the probabilities of moving from one state to another. It is made up of an IndexMap, mapping state *a* to its corresponding index in the HMatrixMap, which will be used for computations.
 
-#### Construction
+### Construction
+
+##### Empty
 
 ```Haskell
 empty :: Markov a
@@ -44,16 +46,36 @@ Creates an empty Markov.
 []
 ```
 
+##### Insertion
+
 ```Haskell
 insert :: (Ord a) => a -> a -> Double -> Markov a -> Markov a
 ```
 
-Insert a pair of states (a, a) and their transition probability into a Markov.
+Insert a pair of states (a, a) and their transition probability into a Markov. If the pair of states is already in  the Markov chain, the probability distribution is replaced.
 
 ```Haskell 
 >>> insert "A" "B" 1.0 empty
 [(("A", "B"), 1.0)]
 ```
+
+##### Additional Insertions
+
+```Haskell
+insertWith :: (Ord a) => (Double -> Double -> Double) -> a -> a -> Double -> Markov a -> Markov a
+```
+
+Insert with a function on Doubles, combining new and old values. If the pair of states is not in the Markov chain, a normal insertion occurs. If the pair of states already exists, the probability distribution is updated by applying the function and input Double to the current probability distribution.
+
+```Haskell
+>>> let x = fromList [(("A", "B"), 0.3), (("A", "A"), 0.7), (("B", "A"), 1.0)]
+>>> insertWith (+) "A" "C" 1.0 x
+[(("B","A"),1.0),(("A","C"),1.0),(("A","B"),0.3),(("A","A"),0.7)]
+>>> insertWith (+) "A" "B" 0.3 x
+[(("B","A"),1.0),(("A","B"),0.6),(("A","A"),0.7)]
+```
+
+Note that it is highly suggested that you normalize after any insertion.
 
 #### From Lists
 Markovs can also be created from a list.
@@ -88,20 +110,61 @@ Creates a Markov from a map of states and transition probabilities
 #### Markov Chains
 There are a few functions to manipulate and test Markov chains
 
+##### Walk
+
 ```Haskell
-walk :: (Ord a) => Markov a -> Int -> IO [a]
+walk :: (Ord a) => Int -> Markov a -> IO [a]
 ```
 
 The walk function starts at the steady state of a Markov chain and takes *n* steps through the chain before stopping, returning a list of the steps taken. If an end state is reached before the number of specified steps, it halts.
 
+```Haskell
+>>> let x = fromList [(("A", "B"), 0.3), (("A", "A"), 0.7), (("B", "A"), 1.0)]
+>>> walk 5 x
+["A","B","A","B","A"]
+```
+##### Steady State
 ```Haskell
 steadyState :: (Ord a) =>  Markov a -> [(a, Double)]
 ```
 
 The steady state (equilibrium distribution) of the Markov chain
 
-#### HaskovText
+```Haskell
+>>> let x = fromList [(("A", "B"), 0.3), (("A", "A"), 0.7), (("B", "A"), 1.0)]
+>>> steadyState x
+[("A",0.7692307692307692),("B",0.23076923076923078)]
+```
 
-HaskovText contains functions for converting text strings to Markov chains using Haskov. 
+##### Normalize
+
+```Haskell
+normalize :: (Ord a) => Markov a -> Markov a
+```
+
+Normalizes the Markov chain. Note that this is necessary for many other chain functions to work properly (i.e. walk and steadyState)
+
+```Haskell
+>>> let x = fromList [(("A", "B"), 9), (("A", "A"), 21), (("B", "A"), 15)]
+>>> normalize x
+[(("B","A"),1.0),(("A","B"),0.3),(("A","A"),0.7)]
+```
+
+####HaskovText
+
+HaskovText provides functions for converting text strings to Markov chains using Haskov. 
+
+```Haskell
+generate :: Text -> Markov Text
+```
+Creates a Haskov Markov chain from a Text.  See [Data.Text](https://hackage.haskell.org/package/text-1.2.2.1/docs/Data-Text.html) 
+
+```Haskell
+>>> let text = pack "A A A A A B A A B A A B A"
+>>> generate text 
+[(("B","A"),3.0),(("A","B"),3.0),(("A","A"),7.0)]
+>>> Haskov.normalize . generate $ text
+[(("B","A"),1.0),(("A","B"),0.3),(("A","A"),0.7)]
+```
 
 > Written with [StackEdit](https://stackedit.io/).
