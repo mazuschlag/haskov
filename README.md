@@ -1,3 +1,4 @@
+
 Welcome to Haskov!
 ====================
 
@@ -24,7 +25,7 @@ import MyDirectory.Haskov (Markov)
 import qualified MyDirectory.Haskov as Has
 ```
 
-###Markov Type
+### Markov Type
 ```Haskell
 data Markov a
 type IndexMap a = Map a Int
@@ -34,7 +35,7 @@ A Markov chain of states *a* and the probabilities of moving from one state to a
 
 ### Construction
 
-##### Empty
+#### Empty
 
 ```Haskell
 empty :: Markov a
@@ -46,7 +47,7 @@ Creates an empty Markov.
 []
 ```
 
-##### Insertion
+#### Insertion
 
 ```Haskell
 insert :: (Ord a) => a -> a -> Double -> Markov a -> Markov a
@@ -59,7 +60,7 @@ Insert a pair of states (a, a) and their transition probability into a Markov. I
 [(("A", "B"), 1.0)]
 ```
 
-##### Additional Insertions
+#### Additional Insertions
 
 ```Haskell
 insertWith :: (Ord a) => (Double -> Double -> Double) -> a -> a -> Double -> Markov a -> Markov a
@@ -77,7 +78,7 @@ Insert with a function on Doubles, combining new and old values. If the pair of 
 
 Note that it is highly suggested that you normalize after any insertion.
 
-#### From Lists
+### From Lists
 Markovs can also be created from a list.
 
 ```Haskell
@@ -91,7 +92,7 @@ Creates a Markov from a list of state and transition probability tuples.
 [(("A", "B"), 0.3), (("A", "A"), 0.7), (("B", "A"), 1.0)]
 ```
 
-#### From Maps
+### From Maps
 Markovs can also be created from a map.
 
 
@@ -107,10 +108,10 @@ Creates a Markov from a map of states and transition probabilities
 [(("A", "B"), 0.3), (("A", "A"), 0.7), (("B", "A"), 1.0)]
 ```
 
-#### Markov Chains
+### Markov Chains
 There are a few functions to manipulate and test Markov chains
 
-##### Walk
+#### Walk
 
 ```Haskell
 walk :: (Ord a) => Int -> Markov a -> IO [a]
@@ -123,7 +124,7 @@ The walk function starts at the steady state of a Markov chain and takes *n* ste
 >>> walk 5 x
 ["A","B","A","B","A"]
 ```
-##### Steady State
+#### Steady State
 ```Haskell
 steadyState :: (Ord a) =>  Markov a -> [(a, Double)]
 ```
@@ -136,7 +137,7 @@ The steady state (equilibrium distribution) of the Markov chain
 [("A",0.7692307692307692),("B",0.23076923076923078)]
 ```
 
-##### Normalize
+#### Normalize
 
 ```Haskell
 normalize :: (Ord a) => Markov a -> Markov a
@@ -150,7 +151,7 @@ Normalizes the Markov chain. Note that this is necessary for many other chain fu
 [(("B","A"),1.0),(("A","B"),0.3),(("A","A"),0.7)]
 ```
 
-####HaskovText
+### HaskovText
 
 HaskovText provides functions for converting text strings to Markov chains using Haskov. 
 
