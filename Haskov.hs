@@ -62,16 +62,29 @@ empty :: Markov a
 empty = Markov (Map.empty) (Map.empty)
 
 insert :: (Ord a) => a -> a -> Double -> Markov a -> Markov a
-insert i j n (Markov imap hmap) 
-    | hasI && (not hasJ) = Markov (Map.insert j s imap) (Map.insert (imap Map.! i, s) n hmap) 
-    | (not hasI) && hasJ = Markov (Map.insert i s imap) (Map.insert (s, imap Map.! j) n hmap) 
-    | (not hasI) && (not hasJ) = Markov (Map.insert j (s+1) (Map.insert i s imap)) (Map.insert (s, (s+1)) n hmap)
-    | otherwise          = Markov imap (Map.insert (imap Map.! i, imap Map.! j) n hmap)
+insert i j d (Markov imap hmap) 
+    | hasI && (not hasJ) = Markov (Map.insert j s imap) (Map.insert (imap Map.! i, s) d hmap) 
+    | (not hasI) && hasJ = Markov (Map.insert i s imap) (Map.insert (s, imap Map.! j) d hmap) 
+    | (not hasI) && (not hasJ) && (i /= j) = Markov (Map.insert j (s+1) (Map.insert i s imap)) (Map.insert (s, (s+1)) d hmap)
+    | (not hasI) && (not hasJ) && (i == j) = Markov (Map.insert i s imap) (Map.insert (s, s) d hmap)
+    | otherwise          = Markov imap (Map.insert (imap Map.! i, imap Map.! j) d hmap)
     where
         hasI = Map.member i imap
         hasJ = Map.member j imap
         s = Map.size imap
-        
+
+insertWith :: (Ord a) => (Double -> Double -> Double) -> a -> a -> Double -> Markov a -> Markov a
+insertWith f i j d (Markov imap hmap)
+    | hasI && (not hasJ) = Markov (Map.insert j s imap) (Map.insert (imap Map.! i, s) d hmap) 
+    | (not hasI) && hasJ = Markov (Map.insert i s imap) (Map.insert (s, imap Map.! j) d hmap) 
+    | (not hasI) && (not hasJ) && (i /= j) = Markov (Map.insert j (s+1) (Map.insert i s imap)) (Map.insert (s, (s+1)) d hmap)
+    | (not hasI) && (not hasJ) && (i == j) = Markov (Map.insert i s imap) (Map.insert (s, s) d hmap)
+    | otherwise          = Markov imap (Map.insertWith f (imap Map.! i, imap Map.! j) d hmap)
+    where
+        hasI = Map.member i imap
+        hasJ = Map.member j imap
+        s = Map.size imap
+
 -- Lists --
 fromList :: (Ord a) => [((a, a), Double)] -> Markov a
 fromList list = 
@@ -130,8 +143,8 @@ hmatrix (Markov imap hmap) =
 
 -- Chains -- 
 
-walk :: (Ord a) => Markov a -> Int -> IO [a]
-walk haskov n = do 
+walk :: (Ord a) => Int -> Markov a -> IO [a]
+walk n haskov = do 
     gen <- getStdGen
     let mat = hmatrix haskov
         ss = tr . steady $ mat
