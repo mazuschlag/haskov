@@ -123,7 +123,7 @@ toimap acc ((i, j), d)
 -- For fromMap
 toimap' :: (Ord a) => IndexMap a -> (a, a) -> Double -> IndexMap a
 toimap' acc (i, j) d 
-    | Map.notMember i acc && Map.notMember j acc = Map.insert j (Map.size acc) (Map.insert i (Map.size acc) acc)
+    | i /= j && Map.notMember i acc && Map.notMember j acc = Map.insert j (Map.size acc+1) (Map.insert i (Map.size acc) acc)
     | Map.notMember i acc = Map.insert i (Map.size acc) acc 
     | Map.notMember j acc = Map.insert j (Map.size acc) acc
     | otherwise = acc
