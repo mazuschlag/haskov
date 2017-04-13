@@ -4,7 +4,7 @@ import System.Random
 import Data.List (foldl')
 import Data.Sequence (Seq, (|>))
 import qualified Data.Sequence as Seqq
-import Data.Map.Strict (Map, keys, foldlWithKey', mapWithKey)
+import Data.Map.Strict (Map, keys, foldlWithKey', foldrWithKey', mapWithKey)
 import qualified Data.Map.Strict as Map
 import Numeric.LinearAlgebra (scale, luSolve, luPacked)
 import qualified Numeric.LinearAlgebra as Lin
@@ -21,7 +21,7 @@ data Markov a = Markov {  imap :: IndexMap a
                         , hmap :: HMatrixMap }
 
 instance (Show a, Ord a) => Show (Markov a) where 
-    show haskov = show $ toList haskov 
+    show haskov = show $ toList haskov
 
 -- Query --
 
@@ -94,14 +94,14 @@ fromList list =
 
 toList :: (Ord a) => Markov a -> [((a, a), Double)]
 toList (Markov imap hmap) =
-    let rIMap = foldlWithKey' reverseIMap Map.empty imap
-    in foldlWithKey' (combineImapHmap rIMap) [] hmap
+    let rIMap = foldrWithKey' reverseIMap Map.empty imap
+    in foldrWithKey' (combineImapHmap rIMap) [] hmap
         
-combineImapHmap :: (Ord a) => Map Int a -> [((a, a), Double)] -> (Int, Int) -> Double -> [((a, a), Double)]
-combineImapHmap rIMap acc (i, j) d = ((rIMap Map.! i, rIMap Map.! j), d) : acc
+combineImapHmap :: (Ord a) => Map Int a -> (Int, Int) -> Double -> [((a, a), Double)] -> [((a, a), Double)]
+combineImapHmap rIMap (i, j) d acc = ((rIMap Map.! i, rIMap Map.! j), d) : acc
 
-reverseIMap :: (Ord a) => Map Int a -> a -> Int -> Map Int a
-reverseIMap  m state i = Map.insert i state m
+reverseIMap :: (Ord a) => a -> Int -> Map Int a -> Map Int a
+reverseIMap state i m = Map.insert i state m
 
 -- Maps --
 
@@ -114,15 +114,19 @@ fromMap mapp =
 -- Helpers --
 -- for fromList
 toimap :: (Ord a) => IndexMap a -> ((a, a), Double) -> IndexMap a
-toimap acc tuple = 
-    if Map.notMember i acc then Map.insert i (Map.size acc) acc else acc
-    where i = fst . fst $ tuple
+toimap acc ((i, j), d)
+    | i /= j && Map.notMember i acc && Map.notMember j acc = Map.insert j (Map.size acc+1) (Map.insert i (Map.size acc) acc)
+    | Map.notMember i acc = Map.insert i (Map.size acc) acc 
+    | Map.notMember j acc = Map.insert j (Map.size acc) acc
+    | otherwise = acc
 
 -- For fromMap
 toimap' :: (Ord a) => IndexMap a -> (a, a) -> Double -> IndexMap a
-toimap' acc tuple n = 
-    if Map.notMember i acc then Map.insert i (Map.size acc) acc else acc
-    where i = fst tuple
+toimap' acc (i, j) d 
+    | Map.notMember i acc && Map.notMember j acc = Map.insert j (Map.size acc) (Map.insert i (Map.size acc) acc)
+    | Map.notMember i acc = Map.insert i (Map.size acc) acc 
+    | Map.notMember j acc = Map.insert j (Map.size acc) acc
+    | otherwise = acc
 
 -- For fromList
 tohmap :: (Ord a) => IndexMap a -> HMatrixMap -> ((a, a), Double) -> HMatrixMap
@@ -179,7 +183,7 @@ steady mat =
         x = luSolve (luPacked q) e -- Solve linear system of Q and e (Qx = e)
     in  scale (1 / (sumElements x)) x  -- Divide x by sum of elements
     
-normalize :: Markov a -> Markov a 
+normalize :: (Ord a) => Markov a -> Markov a 
 normalize (Markov imap hmap) = 
     let ss = foldlWithKey' sumSeq Seqq.empty hmap
     in Markov imap (mapWithKey (calcNorm ss) hmap)
@@ -195,6 +199,13 @@ sumSeq s (i, j) n =
 
 norm :: Matrix Double -> Matrix Double
 norm row = cmap (/ (sumElements row)) row 
+
+-- Mapping --
+map :: (Ord a) => (Double -> Double) -> Markov a -> Markov a
+map f (Markov imap hmap) = Markov imap (fmap f hmap)
+
+--mapWithState :: (Ord a) => (a -> Double -> Double) -> Markov a -> Markov a
+--mapWithState f (Markov imap hmap) = 
 
 -- Rounding function -- 
 roundDouble :: Double -> Int -> Double
