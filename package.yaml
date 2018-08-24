@@ -1,0 +1,37 @@
+name:                haskov
+version:             0.1.0.0
+github:              "mazuschlag/haskov"
+license:             MIT
+author:              "Mark Zuschlag"
+maintainer:          "markazuschlag@gmail.com"
+copyright:           "2018 Mark Zuschlag"
+
+extra-source-files:
+- README.md
+
+# Metadata used when publishing your package
+# synopsis:            Short description of your package
+# category:            Web
+
+# To avoid duplicated efforts in documentation and dealing with the
+# complications of embedding Haddock markup inside cabal files, it is
+# common to point users to the README.md file.
+description:         Please see the README on GitHub at <https://github.com/mazuschlag/haskov#readme>
+
+dependencies:
+- base >= 4.7 && < 5
+- hmatrix >= 0.19.0.0
+- random
+- containers
+- text
+- split
+
+library:
+  source-dirs: src
+
+tests:
+  spec:
+    defaults: hspec/hspec@master
+    dependencies:
+    - haskov
+    - hspec
