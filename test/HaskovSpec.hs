@@ -1,6 +1,6 @@
 module HaskovSpec where
 
-import Haskov (fromList,imap,hmatrix, walk,steady,steadyState,statesI)
+import Haskov (fromList,imap,hmatrix,walk,walkFrom,steady,steadyState,statesI)
 
 import Test.Hspec
 import qualified Data.Set as Set
@@ -53,26 +53,26 @@ spec =
         res <- walk 3 haskov
         expectOnlyValidTransitions transitions res
 
---
---    describe "A haskov walkFrom" $ do
---
---      it "starts with the head initial state" $ do
---        let
---          markov = fromList testTransitions
---        res <- walkFrom "B" 10 markov
---        head res `shouldBe` "B"
---
---      it "just some test" $ do
---        let
---          markov = fromList testTransitions
---          index = imap markov
---          matrix = hmatrix markov
---          start = "A"
---        res <- walkFrom "B" 10 markov
---        --putStrLn $ "index: " ++ ( show index)
---        --putStrLn $ "matrix: " ++ ( show matrix)
---        --putStrLn $ "result from " ++ start ++ ": " ++ ( show res)
---        return ()
+
+    describe "A haskov walkFrom" $ do
+
+      it "starts with the head initial state" $ do
+        let
+          markov = fromList testTransitions
+        res <- walkFrom "B" 10 markov
+        head res `shouldBe` "B"
+
+      it "just some test" $ do
+        let
+          markov = fromList testTransitions
+          index = imap markov
+          matrix = hmatrix markov
+          start = "A"
+        res <- walkFrom "B" 10 markov
+        --putStrLn $ "index: " ++ ( show index)
+        --putStrLn $ "matrix: " ++ ( show matrix)
+        --putStrLn $ "result from " ++ start ++ ": " ++ ( show res)
+        return ()
 
 
 
