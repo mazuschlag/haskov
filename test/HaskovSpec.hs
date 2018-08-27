@@ -2,6 +2,7 @@ module HaskovSpec where
 
 import Haskov (fromList,imap,hmatrix,walk,walkFrom,steady,steadyState,statesI)
 
+import System.Random
 import Test.Hspec
 import qualified Data.Set as Set
 import qualified Numeric.LinearAlgebra.Data as Dat
@@ -42,7 +43,8 @@ spec =
           transitions = [(("A", "B"), 1.0), (("B", "C"), 1.0), (("C", "A"), 1.0)]
           valid = map fst transitions
           markov = fromList transitions
-        res <- walk 10 markov
+        gen <- getStdGen
+        res <- walk 10 markov gen
         expectOnlyValidTransitions transitions res
 
       it "should never do invalid transitions when transtions are not ordered" $ do
@@ -50,7 +52,8 @@ spec =
           transitions = [ (("C", "A"), 1.0), (("A", "B"), 1.0), (("B", "C"), 1.0)]
           valid = map fst transitions
           haskov = fromList transitions
-        res <- walk 3 haskov
+        gen <- getStdGen
+        res <- walk 3 haskov gen
         expectOnlyValidTransitions transitions res
 
 
@@ -59,7 +62,8 @@ spec =
       it "starts with the head initial state" $ do
         let
           markov = fromList testTransitions
-        res <- walkFrom "B" 10 markov
+        gen <- getStdGen
+        res <- walkFrom "B" 10 markov gen
         head res `shouldBe` "B"
 
       it "just some test" $ do
@@ -68,7 +72,8 @@ spec =
           index = imap markov
           matrix = hmatrix markov
           start = "A"
-        res <- walkFrom "B" 10 markov
+        gen <- getStdGen
+        res <- walkFrom "B" 10 markov gen
         --putStrLn $ "index: " ++ ( show index)
         --putStrLn $ "matrix: " ++ ( show matrix)
         --putStrLn $ "result from " ++ start ++ ": " ++ ( show res)

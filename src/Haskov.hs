@@ -128,18 +128,16 @@ hmatrix (Markov imap hmap) =
 
 -- Chains --
 
-walkFrom :: (Ord a, Show a) => a -> Int -> Markov a -> IO [a]
-walkFrom start n haskov = do
-    gen <- getStdGen
+walkFrom :: (Ord a, Show a) => a -> Int -> Markov a -> StdGen -> IO [a]
+walkFrom start n haskov gen = do
     let mat = hmatrix haskov
         imap = statesI haskov
         rimap = transMap imap
         nextRow = mat Dat.? [(imap Map.! start)]
     return (start : (steps rimap mat nextRow n gen))
 
-walk :: (Ord a, Show a) => Int -> Markov a -> IO [a]
-walk n haskov = do
-    gen <- getStdGen
+walk :: (Ord a, Show a) => Int -> Markov a -> StdGen -> IO [a]
+walk n haskov gen = do
     let mat = hmatrix haskov
         ss = tr . steady $ mat
         imap = statesI haskov
